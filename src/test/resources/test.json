@@ -1,0 +1,18 @@
+[
+  {
+    "id": "foo",
+    "type": "bar",
+    "data": {
+      "key1": "value1",
+      "key2": ["value2a", "value2b"]
+    },
+    "relationships": {
+      "someRel": [
+        [
+          "an-id",
+          "a-type"
+        ]
+      ]
+    }
+  }
+]
