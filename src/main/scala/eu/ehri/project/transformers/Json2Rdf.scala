@@ -31,11 +31,13 @@ object Json2Rdf {
   val nameSpace: String = "http://ehri-project.eu/"
   val factory: ValueFactory = ValueFactoryImpl.getInstance()
 
-  // Currently ignoring these types 'cos they're a little troublesome
-  val ignoredTypes = Set(
-    "systemEvent",
-    "version"
-  )
+  // Cache certain URIs to create fewer objects. These are used for
+  // properties and item types where the data has a low cardinality
+  private object URIStore {
+    private val propCache = collection.mutable.Map[String, URI]()
+    private def createNewUri(s: String) = factory.createURI(nameSpace, s)
+    def getUri(s: String) = propCache.getOrElseUpdate(s, createNewUri(s))
+  }
 
   def convert(src: BufferedSource, out: PrintStream, format: RDFFormat): Unit = {
     
@@ -60,7 +62,7 @@ object Json2Rdf {
     if (parser.nextValue() != JsonToken.END_ARRAY) {
 
       jsonMapper.readValues(parser, classOf[Data]).toStream.collect {
-        case Data(Some(id), Some(t), props, rels) if !ignoredTypes.contains(t) =>
+        case Data(Some(id), Some(t), props, rels) =>
           dataToGraph(id, t, props, rels)
       }
     } else Stream.empty[Model]
@@ -68,23 +70,23 @@ object Json2Rdf {
 
   def dataToGraph(id: String, itype: String, props: Map[String, Any], rels: Map[String, List[(String, String)]]): Model = {
     val graph: Model = new LinkedHashModel()
-    val typeURI: URI = factory.createURI(nameSpace, itype)
+    val typeURI: URI = URIStore.getUri(itype)
     val itemURI: URI = factory.createURI(nameSpace, s"$itype#$id")
     graph.add(itemURI, RDF.TYPE, typeURI)
 
     def addLiteral(key: String, literal: Any) = literal match {
       case value: Int =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case value: String =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case value: Long =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case value: Float =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case value: Double =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case value: Boolean =>
-        graph.add(itemURI, factory.createURI(nameSpace, key), factory.createLiteral(value))
+        graph.add(itemURI, URIStore.getUri(key), factory.createLiteral(value))
       case _ =>
     }
 
@@ -94,10 +96,9 @@ object Json2Rdf {
     }
 
     rels.foreach { case (label, set) =>
-      val relProp: URI = factory.createURI(nameSpace, label)
       set.collect {
         case (oid, otype) =>
-          graph.add(itemURI, factory.createURI(nameSpace, label), factory.createURI(nameSpace, s"$otype#$oid"))
+          graph.add(itemURI, URIStore.getUri(label), factory.createURI(nameSpace, s"$otype#$oid"))
       }
     }
 
@@ -106,13 +107,10 @@ object Json2Rdf {
 
   def main(args: Array[String]) = {
 
-    val usage = "json2rdf [-i infile] [-f format]"
-
     val arglist = args.toList
     type OptionMap = Map[Symbol, String]
 
     def nextOption(map: OptionMap, list: List[String]): OptionMap = {
-      def isSwitch(s: String) = s(0) == '-'
       list match {
         case Nil => map
         case "-i" :: value :: tail =>
