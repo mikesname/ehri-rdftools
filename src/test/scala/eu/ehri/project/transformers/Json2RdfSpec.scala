@@ -12,9 +12,12 @@ import scala.collection.JavaConversions._
 import scala.io.Source
 
 class Json2RdfSpec extends FlatSpec with Matchers {
+
+  val converter = Json2Rdf("http://ehri-project.eu/", "ehri", RDFFormat.TURTLE)
+
   "Json2Rdf" should "serialize to a triple stream" in {
     val src = Source.fromURL(getClass.getResource("/test.json"))
-    val tripleSets: List[Model] = Json2Rdf.convertStream(src).toList
+    val tripleSets: List[Model] = converter.convertStream(src).toList
     assert(tripleSets.size === 1)
     val statements: List[Statement] = tripleSets.head.toList
     assert(statements.size === 5)
@@ -37,7 +40,7 @@ class Json2RdfSpec extends FlatSpec with Matchers {
     val src = Source.fromURL(getClass.getResource("/test.json"))
     val baos = new ByteArrayOutputStream()
     val printStream = new PrintStream(baos)
-    Json2Rdf.convert(src, printStream, RDFFormat.TURTLE)
+    converter.convert(src, printStream)
     val out = baos.toString("UTF-8")
     assert(out contains "ehri:key2 \"value2a\" , \"value2b\"")
   }

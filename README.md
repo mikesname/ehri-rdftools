@@ -63,3 +63,8 @@ Different RDF output formats can be set with the -f option. The default is `ttl`
  - xml (RDF+XML)
  - n3
  - rj (RDF/JSON) - **Warning**: doesn't stream and thus uses an amount of memory proportional to the input file.        
+
+Other options are:
+ 
+ - `-n [NAMESPACE` - set the namespace
+ - `-p [PREFIX]`  - set the namespace prefix

@@ -1,6 +1,6 @@
 package eu.ehri.project.transformers
 
-import java.io.{File, PrintStream}
+import java.io.{OutputStream, File}
 
 import com.fasterxml.jackson.core.{JsonFactory, JsonParser, JsonToken}
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -22,27 +22,28 @@ case class Data(
   relationships: Map[String, List[(String, String)]]
 )
 
-object Json2Rdf {
+case class Json2Rdf(nameSpace: String, prefix: String, format: RDFFormat) {
 
   val jsonMapper = new ObjectMapper() with ScalaObjectMapper
   jsonMapper.registerModule(DefaultScalaModule)
   val jsonFactory: JsonFactory = new JsonFactory().setCodec(jsonMapper)
 
-  val nameSpace: String = "http://ehri-project.eu/"
   val factory: ValueFactory = ValueFactoryImpl.getInstance()
 
   // Cache certain URIs to create fewer objects. These are used for
   // properties and item types where the data has a low cardinality
   private object URIStore {
     private val propCache = collection.mutable.Map[String, URI]()
+
     private def createNewUri(s: String) = factory.createURI(nameSpace, s)
+
     def getUri(s: String) = propCache.getOrElseUpdate(s, createNewUri(s))
   }
 
-  def convert(src: BufferedSource, out: PrintStream, format: RDFFormat): Unit = {
-    
+  def convert(src: BufferedSource, out: OutputStream): Unit = {
+
     val rdfwriter: RDFWriter = Rio.createWriter(format, out)
-    rdfwriter.handleNamespace("ehri", nameSpace)
+    rdfwriter.handleNamespace(prefix, nameSpace)
     rdfwriter.startRDF()
 
     convertStream(src).foreach { graph =>
@@ -104,7 +105,9 @@ object Json2Rdf {
 
     graph
   }
+}
 
+object Json2Rdf {
   def main(args: Array[String]) = {
 
     val arglist = args.toList
@@ -117,6 +120,10 @@ object Json2Rdf {
           nextOption(map ++ Map('input -> value), tail)
         case "-f" :: value :: tail =>
           nextOption(map ++ Map('format -> value), tail)
+        case "-n" :: value :: tail =>
+          nextOption(map ++ Map('ns -> value), tail)
+        case "-p" :: value :: tail =>
+          nextOption(map ++ Map('prefix -> value), tail)
         case option :: tail =>
           throw new IllegalArgumentException("Unknown option " + option)
       }
@@ -130,10 +137,12 @@ object Json2Rdf {
         case Some(fn) if !new File(fn).exists() =>
           throw new IllegalArgumentException(s"Input file $fn does not exist!")
       }
+      val ns = options.getOrElse('ns, "http://ehri-project.eu/")
+      val prefix = options.getOrElse('prefix, "ehri")
       val fmt = options.getOrElse('format, "ttl")
       try {
         val rdfFormat: RDFFormat = Rio.getWriterFormatForFileName("name." + fmt)
-        convert(src, System.out, rdfFormat)
+        Json2Rdf(ns, prefix, rdfFormat).convert(src, System.out)
       } catch {
         case e: UnsupportedRDFormatException =>
           throw new IllegalArgumentException("Unable to write RDF format: " + fmt)
